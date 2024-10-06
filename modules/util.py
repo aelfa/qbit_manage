@@ -94,10 +94,8 @@ class TorrentMessages:
 
     IGNORE_MSGS = [
         "YOU HAVE REACHED THE CLIENT LIMIT FOR THIS TORRENT",
-        "MISSING PASSKEY",
+        "PASSKEY",  # Any mention of passkeys should be a clear sign it should NOT be deleted
         "MISSING INFO_HASH",
-        "PASSKEY IS INVALID",
-        "INVALID PASSKEY",
         "EXPECTED VALUE (LIST, DICT, INT OR STRING) IN BENCODED STRING",
         "COULD NOT PARSE BENCODED DATA",
         "STREAM TRUNCATED",
@@ -527,31 +525,41 @@ class CheckHardLinks:
     Class to check for hardlinks
     """
 
-    def __init__(self, root_dir, remote_dir):
-        self.root_dir = root_dir
-        self.remote_dir = remote_dir
-        self.root_files = set(get_root_files(self.root_dir, self.remote_dir))
+    def __init__(self, config):
+        self.root_dir = config.root_dir
+        self.remote_dir = config.remote_dir
+        self.orphaned_dir = config.orphaned_dir if config.orphaned_dir else ""
+        self.recycle_dir = config.recycle_dir if config.recycle_dir else ""
+        self.root_files = set(
+            get_root_files(self.root_dir, self.remote_dir)
+            + get_root_files(self.orphaned_dir, "")
+            + get_root_files(self.recycle_dir, "")
+        )
         self.get_inode_count()
 
     def get_inode_count(self):
         self.inode_count = {}
         for file in self.root_files:
-            try:
-                inode_no = os.stat(file.replace(self.root_dir, self.remote_dir)).st_ino
-            except PermissionError as perm:
-                logger.warning(f"{perm} : file {file} has permission issues. Skipping...")
+            # Only check hardlinks for files that are symlinks
+            if os.path.isfile(file) and os.path.islink(file):
                 continue
-            except FileNotFoundError as file_not_found_error:
-                logger.warning(f"{file_not_found_error} : File {file} not found. Skipping...")
-                continue
-            except Exception as ex:
-                logger.stacktrace()
-                logger.error(ex)
-                continue
-            if inode_no in self.inode_count:
-                self.inode_count[inode_no] += 1
             else:
-                self.inode_count[inode_no] = 1
+                try:
+                    inode_no = os.stat(file.replace(self.root_dir, self.remote_dir)).st_ino
+                except PermissionError as perm:
+                    logger.warning(f"{perm} : file {file} has permission issues. Skipping...")
+                    continue
+                except FileNotFoundError as file_not_found_error:
+                    logger.warning(f"{file_not_found_error} : File {file} not found. Skipping...")
+                    continue
+                except Exception as ex:
+                    logger.stacktrace()
+                    logger.error(ex)
+                    continue
+                if inode_no in self.inode_count:
+                    self.inode_count[inode_no] += 1
+                else:
+                    self.inode_count[inode_no] = 1
 
     def nohardlink(self, file, notify, ignore_root_dir):
         """
@@ -639,6 +647,8 @@ class CheckHardLinks:
 
 def get_root_files(root_dir, remote_dir, exclude_dir=None):
     local_exclude_dir = exclude_dir.replace(remote_dir, root_dir) if exclude_dir and remote_dir != root_dir else exclude_dir
+    # if not root_dir:
+    #     return []
     root_files = [
         os.path.join(path.replace(remote_dir, root_dir) if remote_dir != root_dir else path, name)
         for path, subdirs, files in os.walk(remote_dir if remote_dir != root_dir else root_dir)
@@ -650,7 +660,7 @@ def get_root_files(root_dir, remote_dir, exclude_dir=None):
 
 def load_json(file):
     """Load json file if exists"""
-    if os.path.isfile(file):
+    if os.path.isfile(truncate_filename(file)):
         file = open(file)
         data = json.load(file)
         file.close()
@@ -659,10 +669,48 @@ def load_json(file):
     return data
 
 
+def truncate_filename(filename, max_length=255, offset=0):
+    """
+    Truncate filename if necessary.
+
+    Args:
+        filename (str): The original filename.
+        max_length (int, optional): The maximum length of the truncated filename. Defaults to 255.
+        offset (int, optional): The number of characters to keep from the end of the base name. Defaults to 0.
+
+    Returns:
+        str: The truncated filename.
+
+    """
+    base, ext = os.path.splitext(filename)
+    if len(filename) > max_length:
+        max_base_length = max_length - len(ext) - offset
+        truncated_base = base[:max_base_length]
+        truncated_base_offset = base[-offset:] if offset > 0 else ""
+        truncated_filename = f"{truncated_base}{truncated_base_offset}{ext}"
+    else:
+        truncated_filename = filename
+    return truncated_filename
+
+
 def save_json(torrent_json, dest):
-    """Save json file to destination"""
-    with open(dest, "w", encoding="utf-8") as file:
-        json.dump(torrent_json, file, ensure_ascii=False, indent=4)
+    """Save json file to destination, truncating filename if necessary."""
+    max_filename_length = 255  # Typical maximum filename length on many filesystems
+    directory, filename = os.path.split(dest)
+    filename, ext = os.path.splitext(filename)
+
+    if len(filename) > (max_filename_length - len(ext)):
+        truncated_filename = truncate_filename(filename, max_filename_length)
+        dest = os.path.join(directory, truncated_filename)
+        logger.warning(f"Filename too long, truncated to: {dest}")
+
+    try:
+        with open(dest, "w", encoding="utf-8") as file:
+            json.dump(torrent_json, file, ensure_ascii=False, indent=4)
+    except FileNotFoundError as e:
+        logger.error(f"Failed to save JSON file: {e.filename} - {e.strerror}.")
+    except OSError as e:
+        logger.error(f"OS error occurred: {e.filename} - {e.strerror}.")
 
 
 class GracefulKiller:

@@ -83,6 +83,22 @@ class Qbt:
         self.torrent_list = self.get_torrents({"sort": "added_on"})
         self.torrentfiles = {}  # a map of torrent files to track cross-seeds
 
+        if (
+            self.config.commands["share_limits"]
+            and self.config.settings["disable_qbt_default_share_limits"]
+            and self.client.app.preferences.max_ratio_act != 0
+        ):
+            logger.info("Disabling qBittorrent default share limits to allow qbm to manage share limits.")
+            # max_ratio_act: 0 = Pause Torrent, 1 = Remove Torrent, 2 = superseeding, 3 = Remove Torrent and Files
+            self.client.app_set_preferences(
+                {
+                    "max_ratio_act": 0,
+                    "max_seeding_time_enabled": False,
+                    "max_ratio_enabled": False,
+                    "max_inactive_seeding_time_enabled": False,
+                }
+            )
+
         self.global_max_ratio_enabled = self.client.app.preferences.max_ratio_enabled
         self.global_max_ratio = self.client.app.preferences.max_ratio
         self.global_max_seeding_time_enabled = self.client.app.preferences.max_seeding_time_enabled
@@ -125,7 +141,9 @@ class Qbt:
         logger.separator("Checking Settings", space=False, border=False)
         if settings["force_auto_tmm"]:
             logger.print_line(
-                "force_auto_tmm set to True. Will force Auto Torrent Management for all torrents.", self.config.loglevel
+                "force_auto_tmm set to True. Will force Auto Torrent Management "
+                "for all torrents without matching force_auto_tmm_ignore_tags.",
+                self.config.loglevel,
             )
         logger.separator("Gathering Torrent Information", space=True, border=True)
         for torrent in self.torrent_list:
@@ -134,7 +152,14 @@ class Qbt:
             status = None
             working_tracker = None
             issue = {"potential": False}
-            if torrent.auto_tmm is False and settings["force_auto_tmm"] and torrent.category != "" and not self.config.dry_run:
+            if (
+                torrent.auto_tmm is False
+                and settings["force_auto_tmm"]
+                and torrent.category != ""
+                and not self.config.dry_run
+                # check whether the torrent has a matching tag to ignore force_auto_tmm.
+                and not any(tag in torrent.tags for tag in self.config.settings.get("force_auto_tmm_ignore_tags", []))
+            ):
                 torrent.set_auto_management(True)
             try:
                 torrent_name = torrent.name
@@ -418,15 +443,19 @@ class Qbt:
             else:
                 recycle_path = self.config.recycle_dir
             # Create recycle bin if not exists
-            torrent_path = os.path.join(recycle_path, "torrents")
+            torrent_path = os.path.join(recycle_path, "torrents")  # Export torrent/fastresume from BT_backup
+            torrent_export_path = os.path.join(recycle_path, "torrents_export")  # Exported torrent file (qbittorrent v4.5.0+)
             torrents_json_path = os.path.join(recycle_path, "torrents_json")
             torrent_name = info["torrents"][0]
+            torrent_exportable = self.current_version >= "4.5.0"
             os.makedirs(recycle_path, exist_ok=True)
             if self.config.recyclebin["save_torrents"]:
                 if os.path.isdir(torrent_path) is False:
                     os.makedirs(torrent_path)
                 if os.path.isdir(torrents_json_path) is False:
                     os.makedirs(torrents_json_path)
+                if torrent_exportable and os.path.isdir(torrent_export_path) is False:
+                    os.makedirs(torrent_export_path)
                 torrent_json_file = os.path.join(torrents_json_path, f"{torrent_name}.json")
                 torrent_json = util.load_json(torrent_json_file)
                 if not torrent_json:
@@ -436,6 +465,20 @@ class Qbt:
                 else:
                     logger.info(f"Adding {info['torrent_tracker']} to existing {os.path.basename(torrent_json_file)}")
                 dot_torrent_files = []
+                # Exporting torrent via Qbit API (v4.5.0+)
+                if torrent_exportable:
+                    hash_suffix = f"{info_hash[-8:]}"  # Get the last 8 hash characters of the torrent
+                    torrent_export_file = os.path.join(torrent_export_path, f"{torrent_name} [{hash_suffix}].torrent")
+                    truncated_torrent_export_file = util.truncate_filename(torrent_export_file, offset=11)
+                    try:
+                        with open(f"{truncated_torrent_export_file}", "wb") as file:
+                            file.write(torrent.export())
+                    except Exception as ex:
+                        logger.stacktrace()
+                        self.config.notify(ex, "Deleting Torrent", False)
+                        logger.warning(f"RecycleBin Warning: {ex}")
+                    dot_torrent_files.append(os.path.basename(truncated_torrent_export_file))
+                # Exporting torrent via torrent directory (backwards compatibility)
                 for file in os.listdir(self.config.torrents_dir):
                     if file.startswith(info_hash):
                         dot_torrent_files.append(file)
@@ -457,7 +500,7 @@ class Qbt:
                             backup_str += val
                         else:
                             backup_str += f" and {val.replace(info_hash, '')}"
-                    backup_str += f" to {torrent_path}"
+                    backup_str += f" to {torrent_export_path if torrent_exportable else torrent_path}"
                     logger.info(backup_str)
                 torrent_json["tracker_torrent_files"] = tracker_torrent_files
                 if "files" not in torrent_json:

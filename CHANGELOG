@@ -1,16 +1,11 @@
 # New Updates
-- BHD config options are now deprecated due to qbm no longer needing to use the api to detect unregistered torrents (Closes #595)
-- Updates mover script to add logging and default to completed torrents only with new optional argument (`--status-filter`)
+- Adds new config option `disable_qbt_default_share_limits` to allow qbit_manage to handle share limits and disable qbittorrent's default share limits
+- Adds new config option `max_orphaned_files_to_delete` to set default safeguards against mass deletion when running remove orphaned.
+- Adds new environment variables `QBT_LOG_SIZE` and `QBT_LOG_COUNT` to customize log retention (Closes #656)
 
 # Bug Fixes
-- Adds new ignore message for unregistered torrents (Closes #592)
-- Allow `max_seeding_time` to be unlimited (-1) if min_seeding_time is set (Closes #596)
-- Fixes checking tracker status for udp/wss (Closes #586)
-- Fixes Logging header not getting logged in every run (Closes #591)
-- Fixes min_seeding_time tag removal when max_seeding_time is -1 (#Closes 598)
-- Fixes Remove orphaned without moving to orphaned_dir (Closes #590)
-- Fixes bug in printing schedule mode when run is set to True
-- Modifies noHL threshold to 0.1 to address false positives
+- Truncates Recyclebin JSON filename when its too long. (Closes #604)
+- Uses Qbittorrent's torrent export to save .torrent files for qbittorrent version > 4.5.0 (Closes #650)
+- Include orphaned files and recycle bin in the list of folders to ignore when looking for noHL (Closes #660)
 
-Special thanks to @bakerboy448, @ineednewpajamas, @lflare, @convexshiba  for their contributions!
-**Full Changelog**: https://github.com/StuffAnThings/qbit_manage/compare/v4.1.6...v4.1.7
+**Full Changelog**: https://github.com/StuffAnThings/qbit_manage/compare/v4.1.10...v4.1.11

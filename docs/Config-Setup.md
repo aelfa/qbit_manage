@@ -46,6 +46,7 @@ This section defines any settings defined in the configuration.
 | Variable              | Definition                                                                                                                                         | Default Values | Required           |
 | :-------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------| :-----------------  | :----------------- |
 | `force_auto_tmm`      | Will force qBittorrent to enable Automatic Torrent Management for each torrent.                                                              | False        | <center>❌</center> |
+| `force_auto_tmm_ignore_tags`      | Torrents with these tags will be ignored when force_auto_tmm is enabled.                                                              |         | <center>❌</center> |
 | `tracker_error_tag`   | Define the tag of any torrents that do not have a working tracker. (Used in `--rem-unregistered` and `--tag-tracker-error`)                | issue        | <center>❌</center> |
 | `nohardlinks_tag`   | Define the tag of any torrents that don't have hardlinks (Used in `--tag-nohardlinks`)                 | noHL        | <center>❌</center> |
 | `share_limits_tag`   | Will add this tag when applying share limits to provide an easy way to filter torrents by share limit group/priority for each torrent. For example, if you have a share-limit group `cross-seed` with a priority of 2 and the default share_limits_tag `~share_limits` would add the tag `~share_limit_2.cross-seed` (Used in `--share-limits`)                   | ~share_limit      | <center>❌</center> |
@@ -57,6 +58,7 @@ This section defines any settings defined in the configuration.
 | `share_limits_filter_completed` | When running `--share-limits` function, it will filter for completed torrents only. | True | <center>❌</center> |
 | `tag_nohardlinks_filter_completed` | When running `--tag-nohardlinks` function, , it will filter for completed torrents only. | True | <center>❌</center> |
 | `cat_update_all` | When running `--cat-update` function, it will check and update all torrents categories, otherwise it will only update uncategorized torrents. | True | <center>❌</center> |
+| `disable_qbt_default_share_limits` | When running `--share-limits` function, it allows QBM to handle share limits by disabling qBittorrents default Share limits. | True | <center>❌</center> |
 ## **directory:**
 
 ---
@@ -74,8 +76,8 @@ This section defines the directories that qbit_manage will be looking into for v
 ## **cat:**
 
 ---
-This section defines the categories that you are currently using and the path's that are associated with them.<br>
-> **NOTE** ALL categories must be defined, if it is in your qBit, then it **MUST** be defined here, if not the script will throw errors. If you want to leave a save_path as uncategorized you can use the key 'Uncategorized' as the name of the category.
+This section defines the categories that you are currently using and the save path's that are associated with them.<br>
+> **NOTE** ALL save paths must be defined, if it is in your qBit, then it **MUST** be defined here, if not the script will throw errors. If you want to leave a save_path as uncategorized you can use the key 'Uncategorized' as the name of the category.
 
 | Configuration | Definition                | Required           |
 | :------------ | :------------------------ | :----------------- |
@@ -197,6 +199,7 @@ This is handy when you have automatically generated files that certain OSs decid
 | :------------------- | :------------------------------------------------------------------------------------------------------------------------------------------ | :------------- | :----------------- |
 | `empty_after_x_days` | Will delete Orphaned data contents if the files have been in the Orphaned data for more than x days. (Uses date modified to track the time) | None           | <center>❌</center> |
 | `exclude_patterns`   | List of [patterns](https://commandbox.ortusbooks.com/usage/parameters/globbing-patterns) to exclude certain files from orphaned             | None           | <center>❌</center> |
+| `max_orphaned_files_to_delete`   | This will help reduce the number of accidental large amount orphaned deletions in a single run. Set your desired threshold for the maximum number of orphaned files qbm will delete in a single run. (-1 to disable safeguards)             | 50           | <center>❌</center> |
 > Note: The more time you place for the `empty_after_x_days:` variable the better, allowing you more time to catch any mistakes by the script. If the variable is set to `0` it will delete contents immediately after every script run. If the variable is not set it will never delete the contents of the Orphaned Data.
 
 ## **apprise:**
