@@ -46,7 +46,7 @@ pip install -e ".[dev]"
 pre-commit install
 ```
 
-> uv is also kept current via Dependabot (uv ecosystem), so lock-file updates happen automatically.
+> uv is also kept current via Renovate (the `pep621`/uv manager), so lock-file updates happen automatically.
 
 ---
 
@@ -169,6 +169,14 @@ chore(deps): bump ruff from 0.14.5 to 0.14.6
 3. Push your branch and open a PR against **`develop`** — not `master`.
 4. Describe what your PR does and link any related issues.
 5. A maintainer will review; CI must be green before merge.
+
+> **PR build artifacts:** PRs from the repo owner and org members build
+> automatically on every push — the full 5-platform PyInstaller + Tauri bundle
+> matrix (downloadable `qbit-manage-release-assets` artifact) plus a
+> `ghcr.io/<owner>/qbit_manage:pr-<number>` docker image. For everyone else
+> (outside collaborators, contributors, fork PRs), ask a maintainer to add the
+> **`build` label** to trigger the same artifacts before merge. Fork PRs get the
+> binary artifacts but not the docker image (no registry push from a fork).
 
 For the release process (merging `develop → master`, tagging, PyPI publish),
 see [`DEVELOPER.md`](../DEVELOPER.md).
